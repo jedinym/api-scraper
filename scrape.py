@@ -4,7 +4,7 @@ import requests as rq
 import argparse as ap
 
 from sys import stderr
-from os import remove
+from os import remove, mkdir, path
 
 from datetime import datetime
 
@@ -14,6 +14,9 @@ BASE_URL = "https://api.cryptochassis.com/v1"
 
 
 def get_end_time(start_time: str, exchange: str, instrument: str) -> str:
+    """
+    Get end_time from response
+    """
     response = rq.get(
         f"{BASE_URL}/trade/{exchange}/{instrument}?startTime={start_time}"
     )
@@ -27,6 +30,9 @@ def get_end_time(start_time: str, exchange: str, instrument: str) -> str:
 
 
 def get_file_url(start_time: str, exchange: str, instrument: str) -> str:
+    """
+    Get url of gzipped file
+    """
     response = rq.get(
         f"{BASE_URL}/market-depth/{exchange}/{instrument}?startTime={start_time}"
     )
@@ -40,6 +46,9 @@ def get_file_url(start_time: str, exchange: str, instrument: str) -> str:
 
 
 def download_gzip(url: str, filename: str) -> None:
+    """
+    Download gzipped file and save it to disk
+    """
     response = rq.get(url)
 
     if response.status_code != 200:
@@ -51,7 +60,9 @@ def download_gzip(url: str, filename: str) -> None:
 
 
 def write_to_csv(gzipped_file: str, filename: str):
-
+    """
+    Decompress gzipped file and save it to disk
+    """
     with open(gzipped_file, 'rb') as gzipped:
         with open(filename, 'wb') as csv:
             content = gzipped.read()
@@ -62,7 +73,7 @@ def days(start_time: str, end_time: str):
     cur_time = start_time
     while int(cur_time) <= int(end_time):
         yield cur_time
-        cur_time = str(int(cur_time) + 86400)
+        cur_time = str(int(cur_time) + 86400)  # add day
 
 
 def setup_parser() -> ap.ArgumentParser:
@@ -87,7 +98,7 @@ def setup_parser() -> ap.ArgumentParser:
     parser.add_argument(
         "--instrument", "-i", dest="instrument", type=str, required=True
     )
-    # parser.add_argument("--dest", dest="exchange", type=str, required=True)
+    parser.add_argument("--dest", dest="directory", type=str, required=True, help="RELATIVE path to directory to put csv files into")
 
     return parser
 
@@ -95,6 +106,13 @@ def setup_parser() -> ap.ArgumentParser:
 def get_file_name(start_time: str) -> str:
     day = datetime.utcfromtimestamp(int(start_time)).strftime('%d_%m_%Y')
     return day
+
+
+def make_dir(dir_name: str):
+    if path.exists(dir_name) and path.isdir(dir_name):
+        return
+
+    mkdir(dir_name)
 
 
 if __name__ == "__main__":
@@ -105,9 +123,16 @@ if __name__ == "__main__":
     if end_time is None:
         end_time = get_end_time(args.init_time, args.exchange, args.instrument)
 
+    # makes directory if it doesn't exist
+    make_dir(args.directory)
+
     for start_time in days(args.init_time, end_time):
         url = get_file_url(start_time, args.exchange, args.instrument)
-        file_name = get_file_name(start_time)
-        download_gzip(url, f'{file_name}.gz')
-        write_to_csv(f'{file_name}.gz', f'{file_name}.csv')
-        remove(f'{file_name}.gz')
+
+        file_name_date = get_file_name(start_time)
+        gzipped_file_name = f'{args.directory}/{file_name_date}.gz'
+        csv_file_name = f'{args.directory}/{file_name_date}.csv'
+
+        download_gzip(url, gzipped_file_name)
+        write_to_csv(gzipped_file_name, csv_file_name)
+        remove(gzipped_file_name)
