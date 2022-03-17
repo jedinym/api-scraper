@@ -114,7 +114,7 @@ def setup_parser() -> ap.ArgumentParser:
         "--delete-header",
         dest="delete_header",
         action="store_const",
-        const=False,
+        const=True,
         default=False,
         help="Delete header in final csv file",
     )
@@ -138,7 +138,7 @@ def remove_second(in_str: str) -> str:
     return in_str.split("_")[0]
 
 
-def cull_columns(columns: list[str], csv_to_edit: str, out_csv: str) -> None:
+def cull_columns(columns: list[str], csv_to_edit: str, out_csv: str, header: bool) -> None:
     source = pd.read_csv(csv_to_edit)
 
     for column in columns:
@@ -148,7 +148,22 @@ def cull_columns(columns: list[str], csv_to_edit: str, out_csv: str) -> None:
 
     source = pd.concat([first_col, source["ask_price_ask_size"].apply(remove_second)], axis=1)
 
-    source.to_csv(out_csv, index=False, header=(not DELETE_HEADER))
+    source.to_csv(out_csv, index=False, header=header)
+
+
+def download_csv_data(url: str, start_time: str, header: bool):
+    file_name_date = get_file_name(start_time)
+    gzipped_file_name = f"{args.directory}/{file_name_date}.gz"
+
+    no_edit_csv_file_name = f"{args.directory}/{file_name_date}.ne"
+
+    download_gzip(url, gzipped_file_name)
+    write_to_csv(gzipped_file_name, no_edit_csv_file_name)
+    remove(gzipped_file_name)
+
+    edit_csv_file_name = f"{args.directory}/{file_name_date}.csv"
+    cull_columns(["bid_price_bid_size"], no_edit_csv_file_name, edit_csv_file_name, header)
+    remove(no_edit_csv_file_name)
 
 
 if __name__ == "__main__":
@@ -159,23 +174,10 @@ if __name__ == "__main__":
     if end_time is None:
         end_time = get_end_time(args.init_time, args.exchange, args.instrument)
 
-    DELETE_HEADER = args.delete_header
-
     # makes directory if it doesn't exist
     make_dir(args.directory)
 
     for start_time in days(args.init_time, end_time):
         url = get_file_url(start_time, args.exchange, args.instrument)
 
-        file_name_date = get_file_name(start_time)
-        gzipped_file_name = f"{args.directory}/{file_name_date}.gz"
-
-        no_edit_csv_file_name = f"{args.directory}/{file_name_date}.ne"
-
-        download_gzip(url, gzipped_file_name)
-        write_to_csv(gzipped_file_name, no_edit_csv_file_name)
-        remove(gzipped_file_name)
-
-        edit_csv_file_name = f"{args.directory}/{file_name_date}.csv"
-        cull_columns(["bid_price_bid_size"], no_edit_csv_file_name, edit_csv_file_name)
-        remove(no_edit_csv_file_name)
+        download_csv_data(url, start_time, not args.delete_header)
