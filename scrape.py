@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-from typing import List
+from typing import List, Generator
 
 import requests as rq
 import argparse as ap
@@ -67,7 +67,7 @@ def download_gzip(url: str, filename: str) -> None:
         gzipped.write(response.content)
 
 
-def write_to_csv(gzipped_file: str, filename: str):
+def write_to_csv(gzipped_file: str, filename: str) -> None:
     """
     Decompress gzipped file and save it to disk
     """
@@ -77,7 +77,7 @@ def write_to_csv(gzipped_file: str, filename: str):
             csv.write(gzip.decompress(content))
 
 
-def days(start_time: str, end_time: str):
+def days(start_time: str, end_time: str) -> Generator[str, None, None]:
     cur_time = start_time
     while int(cur_time) <= int(end_time):
         yield cur_time
@@ -130,7 +130,7 @@ def get_file_name(start_time: str) -> str:
     return day
 
 
-def make_dir(dir_name: str):
+def make_dir(dir_name: str) -> None:
     if path.exists(dir_name) and path.isdir(dir_name):
         return
 
