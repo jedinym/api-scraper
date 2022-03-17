@@ -17,9 +17,9 @@ def get_end_time(start_time: str, exchange: str, instrument: str) -> str:
     """
     Get end_time from response
     """
-    response = rq.get(
-        f"{BASE_URL}/trade/{exchange}/{instrument}?startTime={start_time}"
-    )
+    query = f"{BASE_URL}/trade/{exchange}/{instrument}?startTime={start_time}"
+    print('GET  ' + query)
+    response = rq.get(query)
 
     if response.status_code != 200:
         print(response.content, file=stderr)
@@ -33,9 +33,9 @@ def get_file_url(start_time: str, exchange: str, instrument: str) -> str:
     """
     Get url of gzipped file
     """
-    response = rq.get(
-        f"{BASE_URL}/market-depth/{exchange}/{instrument}?startTime={start_time}"
-    )
+    query = f"{BASE_URL}/market-depth/{exchange}/{instrument}?startTime={start_time}"
+    print('GET  ' + query)
+    response = rq.get(query)
 
     if response.status_code != 200:
         print(response.content, file=stderr)
