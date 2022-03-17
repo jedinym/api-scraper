@@ -9,6 +9,11 @@ from os import remove, mkdir, path
 from datetime import datetime
 
 import gzip
+import csv
+
+import pandas as pd
+
+DELETE_HEADER = False
 
 BASE_URL = "https://api.cryptochassis.com/v1"
 
@@ -18,7 +23,7 @@ def get_end_time(start_time: str, exchange: str, instrument: str) -> str:
     Get end_time from response
     """
     query = f"{BASE_URL}/trade/{exchange}/{instrument}?startTime={start_time}"
-    print('GET  ' + query)
+    print("GET  " + query)
     response = rq.get(query)
 
     if response.status_code != 200:
@@ -34,7 +39,7 @@ def get_file_url(start_time: str, exchange: str, instrument: str) -> str:
     Get url of gzipped file
     """
     query = f"{BASE_URL}/market-depth/{exchange}/{instrument}?startTime={start_time}"
-    print('GET  ' + query)
+    print("GET  " + query)
     response = rq.get(query)
 
     if response.status_code != 200:
@@ -55,7 +60,7 @@ def download_gzip(url: str, filename: str) -> None:
         print(response.content, file=stderr)
         exit(1)
 
-    with open(f'{filename}', 'wb') as gzipped:
+    with open(f"{filename}", "wb") as gzipped:
         gzipped.write(response.content)
 
 
@@ -63,8 +68,8 @@ def write_to_csv(gzipped_file: str, filename: str):
     """
     Decompress gzipped file and save it to disk
     """
-    with open(gzipped_file, 'rb') as gzipped:
-        with open(filename, 'wb') as csv:
+    with open(gzipped_file, "rb") as gzipped:
+        with open(filename, "wb") as csv:
             content = gzipped.read()
             csv.write(gzip.decompress(content))
 
@@ -98,13 +103,27 @@ def setup_parser() -> ap.ArgumentParser:
     parser.add_argument(
         "--instrument", "-i", dest="instrument", type=str, required=True
     )
-    parser.add_argument("--dest", dest="directory", type=str, required=True, help="RELATIVE path to directory to put csv files into")
+    parser.add_argument(
+        "--dest",
+        dest="directory",
+        type=str,
+        required=True,
+        help="RELATIVE path to directory to put csv files into",
+    )
+    parser.add_argument(
+        "--delete-header",
+        dest="delete_header",
+        action="store_const",
+        const=False,
+        default=False,
+        help="Delete header in final csv file",
+    )
 
     return parser
 
 
 def get_file_name(start_time: str) -> str:
-    day = datetime.utcfromtimestamp(int(start_time)).strftime('%Y_%m_%d')
+    day = datetime.utcfromtimestamp(int(start_time)).strftime("%Y_%m_%d")
     return day
 
 
@@ -115,6 +134,23 @@ def make_dir(dir_name: str):
     mkdir(dir_name)
 
 
+def remove_second(in_str: str) -> str:
+    return in_str.split("_")[0]
+
+
+def cull_columns(columns: list[str], csv_to_edit: str, out_csv: str) -> None:
+    source = pd.read_csv(csv_to_edit)
+
+    for column in columns:
+        source = source.drop(column, axis=1)
+
+    first_col = source.iloc[:, [0]]
+
+    source = pd.concat([first_col, source["ask_price_ask_size"].apply(remove_second)], axis=1)
+
+    source.to_csv(out_csv, index=False, header=(not DELETE_HEADER))
+
+
 if __name__ == "__main__":
     parser = setup_parser()
     args = parser.parse_args()
@@ -123,6 +159,8 @@ if __name__ == "__main__":
     if end_time is None:
         end_time = get_end_time(args.init_time, args.exchange, args.instrument)
 
+    DELETE_HEADER = args.delete_header
+
     # makes directory if it doesn't exist
     make_dir(args.directory)
 
@@ -130,9 +168,14 @@ if __name__ == "__main__":
         url = get_file_url(start_time, args.exchange, args.instrument)
 
         file_name_date = get_file_name(start_time)
-        gzipped_file_name = f'{args.directory}/{file_name_date}.gz'
-        csv_file_name = f'{args.directory}/{file_name_date}.csv'
+        gzipped_file_name = f"{args.directory}/{file_name_date}.gz"
+
+        no_edit_csv_file_name = f"{args.directory}/{file_name_date}.ne"
 
         download_gzip(url, gzipped_file_name)
-        write_to_csv(gzipped_file_name, csv_file_name)
+        write_to_csv(gzipped_file_name, no_edit_csv_file_name)
         remove(gzipped_file_name)
+
+        edit_csv_file_name = f"{args.directory}/{file_name_date}.csv"
+        cull_columns(["bid_price_bid_size"], no_edit_csv_file_name, edit_csv_file_name)
+        remove(no_edit_csv_file_name)
