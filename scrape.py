@@ -104,7 +104,7 @@ def setup_parser() -> ap.ArgumentParser:
 
 
 def get_file_name(start_time: str) -> str:
-    day = datetime.utcfromtimestamp(int(start_time)).strftime('%d_%m_%Y')
+    day = datetime.utcfromtimestamp(int(start_time)).strftime('%Y_%m_%d')
     return day
 
 
