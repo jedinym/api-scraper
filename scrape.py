@@ -1,10 +1,13 @@
 #!/usr/bin/python
 
+from typing import List
+
 import requests as rq
 import argparse as ap
 
 from sys import stderr
 from os import remove, mkdir, path
+
 
 from datetime import datetime
 
@@ -138,7 +141,7 @@ def remove_second(in_str: str) -> str:
     return in_str.split("_")[0]
 
 
-def cull_columns(columns: list[str], csv_to_edit: str, out_csv: str, header: bool) -> None:
+def cull_columns(columns: List[str], csv_to_edit: str, out_csv: str, header: bool) -> None:
     source = pd.read_csv(csv_to_edit)
 
     for column in columns:
@@ -151,19 +154,24 @@ def cull_columns(columns: list[str], csv_to_edit: str, out_csv: str, header: boo
     source.to_csv(out_csv, index=False, header=header)
 
 
-def download_csv_data(url: str, start_time: str, header: bool):
+def download_csv_data(url: str, start_time: str, header: bool, base_dir: str) -> None:
     file_name_date = get_file_name(start_time)
-    gzipped_file_name = f"{args.directory}/{file_name_date}.gz"
+    gzipped_file_name = f"{base_dir}/{file_name_date}.gz"
 
-    no_edit_csv_file_name = f"{args.directory}/{file_name_date}.ne"
+    no_edit_csv_file_name = f"{base_dir}/{file_name_date}.ne"
 
     download_gzip(url, gzipped_file_name)
     write_to_csv(gzipped_file_name, no_edit_csv_file_name)
     remove(gzipped_file_name)
 
-    edit_csv_file_name = f"{args.directory}/{file_name_date}.csv"
+    edit_csv_file_name = f"{base_dir}/{file_name_date}.csv"
     cull_columns(["bid_price_bid_size"], no_edit_csv_file_name, edit_csv_file_name, header)
     remove(no_edit_csv_file_name)
+
+
+def already_present(start_time: str, base_dir: str) -> bool:
+    file_name = get_file_name(start_time)
+    return path.exists(f'{base_dir}/f{file_name}.csv')
 
 
 if __name__ == "__main__":
@@ -178,6 +186,9 @@ if __name__ == "__main__":
     make_dir(args.directory)
 
     for start_time in days(args.init_time, end_time):
+        if already_present(start_time, args.directory):
+            continue
+
         url = get_file_url(start_time, args.exchange, args.instrument)
 
-        download_csv_data(url, start_time, not args.delete_header)
+        download_csv_data(url, start_time, not args.delete_header, args.directory)
